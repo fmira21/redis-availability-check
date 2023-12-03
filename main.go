@@ -1,50 +1,54 @@
 package main
 
 import (
-	"os"
-	"log"
 	"context"
+	"flag"
+	"log"
+	"strings"
+	"time"
+
 	"github.com/redis/go-redis/v9"
 )
 
-type config struct {
-	Database int
-	Password string
-	NonClusterAddress string `yaml:"nonClusterAddress"`
-	Verbose bool
-	StopIfUnvavilable bool `yaml:"stopIfUnvavilable"`
-	Cluster struct {
-		Enabled bool
-		RandomRouting bool `yaml:"randomRouting"`
-		ClusterAddresses []string `yaml:"clusterAddresses"`
-	}
-}
-
-type clientConnections struct {
-	ClusterClient *redis.ClusterClient
-	IndependentClient *redis.Client
-}
-
 func main() {
-	if len(os.Args) != 2 {
-		log.Fatalln("[ FATAL ] Did not find the config:(")
+	clusterAddrs := flag.String("cluster", "", "Redis cluster addresses, comma separated")
+	serverAddr := flag.String("server", "", "Redis single server address")
+	username := flag.String("username", "", "Redis username")
+	password := flag.String("password", "", "Redis password")
+	flag.Parse()
+
+	var conn redis.UniversalClient
+
+	if *clusterAddrs != "" {
+		conn = redis.NewClusterClient(&redis.ClusterOptions{
+			Addrs:         strings.Split(*clusterAddrs, ","),
+			Username:      *username,
+			Password:      *password,
+			RouteRandomly: true,
+		})
+	} else if *serverAddr != "" {
+		conn = redis.NewClient(&redis.Options{
+			Addr:     *serverAddr,
+			Username: *username,
+			Password: *password,
+		})
 	}
 
-	config, err := readConf(os.Args[1])
-	logFatalErr(err)
+	ctx := context.Background()
 
-	validateConf(config)
-	logTraits(config)
+	for {
+		value := time.Now().Format(time.RFC3339Nano)
 
-	var cc clientConnections
-	context := context.Background()
+		if err := conn.Set(ctx, "redis-test", value, 0).Err(); err != nil {
+			log.Println("Set error:", err)
+		}
 
-	if config.Cluster.Enabled {
-		cc.ClusterClient = connectCluster(config)
-		loadClusterClient(config, context, cc.ClusterClient)
-	} else {
-		cc.IndependentClient = connectNonCluster(config)
-		loadClient(config, context, cc.IndependentClient)
+		if val, err := conn.Get(ctx, "redis-test").Result(); err != nil || value != val {
+			log.Println("Get error:", err)
+		} else {
+			log.Println("Value:", val)
+		}
+
+		time.Sleep(200 * time.Millisecond)
 	}
 }
-
