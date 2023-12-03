@@ -3,7 +3,7 @@
 ## Install dependencies
 
 ```bash
-go mod download
+go mod vendor
 ```
 
 ## Run in single-server mod
