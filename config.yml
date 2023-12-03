@@ -1,0 +1,12 @@
+database: 0
+password: ""
+nonClusterAddress: ""
+
+verbose: false
+stopIfUnvavilable: false
+
+cluster: 
+  enabled: true
+  randomRouting: false
+  clusterAddresses:
+    - "foo.bar:6379"
